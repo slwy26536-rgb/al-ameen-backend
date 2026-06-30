@@ -1,0 +1,17 @@
+{
+  "name": "al-ameen-backend",
+  "version": "1.0.0",
+  "description": "Backend للمستورد الأمين - يستقبل طلبات الفورم، يرسلها لفيسبوك Conversions API، ويعيد رابط واتساب",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
