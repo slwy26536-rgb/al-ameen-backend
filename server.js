@@ -38,7 +38,7 @@ app.get('/', (req, res) => {
 // ===== Endpoint الرئيسي: استقبال الطلب =====
 app.post('/api/order', async (req, res) => {
   try {
-    const { name, phone, phone2, city, area, qty, notes, withUpsell, totalPrice, eventSourceUrl, fbp, fbc } = req.body;
+    const { name, phone, phone2, city, area, qty, notes, withUpsell, totalPrice, eventSourceUrl, fbp, fbc, eventId } = req.body;
 
     // تحقق أساسي من البيانات
     if (!name || !phone || !city || !area) {
@@ -70,16 +70,23 @@ app.post('/api/order', async (req, res) => {
     let fbResult = null;
     if (ACCESS_TOKEN) {
       try {
+        const nameParts = name.trim().split(/\s+/);
+        const firstName = nameParts[0] || name;
+        const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : undefined;
+
         const eventData = {
           data: [
             {
               event_name: 'Purchase',
               event_time: Math.floor(Date.now() / 1000),
+              event_id: eventId || undefined, // لمنع تكرار احتساب نفس الحدث مع نسخة المتصفح (Pixel)
               event_source_url: eventSourceUrl || 'https://al-ameen-iq.com',
               action_source: 'website',
               user_data: {
                 ph: [sha256(phone)],
-                fn: [sha256(name.split(' ')[0] || name)],
+                fn: [sha256(firstName)],
+                ln: lastName ? [sha256(lastName)] : undefined,
+                country: [sha256('iq')],
                 client_ip_address: req.headers['x-forwarded-for'] || req.socket.remoteAddress,
                 client_user_agent: req.headers['user-agent'],
                 fbp: fbp || undefined,
@@ -89,6 +96,9 @@ app.post('/api/order', async (req, res) => {
                 currency: 'IQD',
                 value: Number(totalPrice) || 0,
                 content_name: 'بكج حسين التعليمي',
+                content_type: 'product',
+                content_ids: ['baqij-hussein'],
+                contents: [{ id: 'baqij-hussein', quantity: Number(qty) || 1 }],
                 num_items: Number(qty) || 1,
               },
             },
@@ -130,7 +140,7 @@ app.post('/api/order', async (req, res) => {
 // ===== Endpoint لتتبع InitiateCheckout (لما يضغط الزبون "احجز الآن") =====
 app.post('/api/track-checkout', async (req, res) => {
   try {
-    const { totalPrice, eventSourceUrl, fbp, fbc } = req.body;
+    const { totalPrice, eventSourceUrl, fbp, fbc, eventId } = req.body;
 
     if (ACCESS_TOKEN) {
       const eventData = {
@@ -138,6 +148,7 @@ app.post('/api/track-checkout', async (req, res) => {
           {
             event_name: 'InitiateCheckout',
             event_time: Math.floor(Date.now() / 1000),
+            event_id: eventId || undefined,
             event_source_url: eventSourceUrl || 'https://al-ameen-iq.com',
             action_source: 'website',
             user_data: {
@@ -149,6 +160,8 @@ app.post('/api/track-checkout', async (req, res) => {
             custom_data: {
               currency: 'IQD',
               value: Number(totalPrice) || 0,
+              content_type: 'product',
+              content_ids: ['baqij-hussein'],
             },
           },
         ],
@@ -169,6 +182,56 @@ app.post('/api/track-checkout', async (req, res) => {
     res.json({ success: true, fbTracked: false });
   } catch (error) {
     console.error('خطأ في تتبع checkout:', error);
+    res.status(500).json({ error: 'حدث خطأ' });
+  }
+});
+
+// ===== Endpoint لتتبع ViewContent (لما الزائر يفتح الصفحة) =====
+app.post('/api/track-view', async (req, res) => {
+  try {
+    const { eventSourceUrl, fbp, fbc, eventId } = req.body;
+
+    if (ACCESS_TOKEN) {
+      const eventData = {
+        data: [
+          {
+            event_name: 'ViewContent',
+            event_time: Math.floor(Date.now() / 1000),
+            event_id: eventId || undefined,
+            event_source_url: eventSourceUrl || 'https://al-ameen-iq.com',
+            action_source: 'website',
+            user_data: {
+              client_ip_address: req.headers['x-forwarded-for'] || req.socket.remoteAddress,
+              client_user_agent: req.headers['user-agent'],
+              fbp: fbp || undefined,
+              fbc: fbc || undefined,
+            },
+            custom_data: {
+              currency: 'IQD',
+              value: 15000,
+              content_name: 'بكج حسين التعليمي',
+              content_type: 'product',
+              content_ids: ['baqij-hussein'],
+            },
+          },
+        ],
+      };
+
+      const fbResponse = await fetch(
+        `https://graph.facebook.com/${GRAPH_API_VERSION}/${PIXEL_ID}/events?access_token=${ACCESS_TOKEN}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(eventData),
+        }
+      );
+      const result = await fbResponse.json();
+      return res.json({ success: true, fbResult: result });
+    }
+
+    res.json({ success: true, fbTracked: false });
+  } catch (error) {
+    console.error('خطأ في تتبع ViewContent:', error);
     res.status(500).json({ error: 'حدث خطأ' });
   }
 });
