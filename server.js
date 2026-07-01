@@ -265,7 +265,10 @@ app.get('/webhook', (req, res) => {
 
 // ===== 2) استقبال رسائل الماسنجر الفعلية =====
 app.post('/webhook', (req, res) => {
-  const body = req.body;
+  // سطر تشخيصي: يطبع أي طلب يوصل هنا بدون أي شرط، حتى نتأكد إن الطلب وصل فعلاً
+  console.log('🔔 وصل طلب POST لـ /webhook:', JSON.stringify(req.body));
+
+  const body = req.body || {};
 
   if (body.object === 'page') {
     body.entry?.forEach((entry) => {
