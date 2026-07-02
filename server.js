@@ -27,6 +27,9 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || ''; // كلمة سر بسي
 // ملاحظة: هذا يفرغ لو السيرفر أعاد التشغيل (نادر الحدوث على Render). لاحقاً ممكن يتحول لقاعدة بيانات حقيقية.
 const messengerContacts = {}; // { psid: { referral, firstSeen } }
 
+// ===== سجل آخر Webhooks للتشخيص =====
+const webhookDebug = [];
+
 // ===== دالة هاش SHA256 (فيسبوك يطلب البيانات الشخصية مشفرة) =====
 function sha256(value) {
   if (!value) return undefined;
@@ -265,6 +268,16 @@ app.get('/webhook', (req, res) => {
 
 // ===== 2) استقبال رسائل الماسنجر الفعلية =====
 app.post('/webhook', (req, res) => {
+  webhookDebug.unshift({
+    time: new Date().toISOString(),
+    headers: req.headers,
+    body: req.body
+  });
+
+  if (webhookDebug.length > 20) {
+    webhookDebug.pop();
+  }
+
   // سطر تشخيصي: يطبع أي طلب يوصل هنا بدون أي شرط، حتى نتأكد إن الطلب وصل فعلاً
   console.log('🔔 وصل طلب POST لـ /webhook:', JSON.stringify(req.body));
 
@@ -442,7 +455,16 @@ app.post('/api/messenger-order', async (req, res) => {
   }
 });
 
+// ===== صفحة تشخيص آخر Webhooks =====
+app.get('/debug-webhook', (req, res) => {
+  res.json({
+    count: webhookDebug.length,
+    events: webhookDebug
+  });
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`🚀 السيرفر شغال على المنفذ ${PORT}`);
 });
+      
