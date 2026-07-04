@@ -98,6 +98,8 @@ app.post('/api/order', async (req, res) => {
                 ph: [sha256(phone)],
                 fn: [sha256(firstName)],
                 ln: lastName ? [sha256(lastName)] : undefined,
+                ct: area ? [sha256(area)] : undefined, // المنطقة/الحي - تحسين دقة المطابقة
+                st: city ? [sha256(city)] : undefined, // المحافظة - تحسين دقة المطابقة
                 country: [sha256('iq')],
                 client_ip_address: req.headers['x-forwarded-for'] || req.socket.remoteAddress,
                 client_user_agent: req.headers['user-agent'],
@@ -194,6 +196,54 @@ app.post('/api/track-checkout', async (req, res) => {
     res.json({ success: true, fbTracked: false });
   } catch (error) {
     console.error('خطأ في تتبع checkout:', error);
+    res.status(500).json({ error: 'حدث خطأ' });
+  }
+});
+
+// ===== Endpoint لتتبع نقرات أزرار التواصل المباشر (واتساب/ماسنجر) =====
+// هذا حدث مخصص (Custom Event) يفيد ببناء جمهور "أظهر نية تواصل" لإعادة الاستهداف
+app.post('/api/track-contact', async (req, res) => {
+  try {
+    const { type, eventSourceUrl, fbp, fbc, eventId } = req.body;
+    const eventName = type === 'whatsapp' ? 'ContactWhatsApp' : 'ContactMessenger';
+
+    if (ACCESS_TOKEN) {
+      const eventData = {
+        data: [
+          {
+            event_name: eventName,
+            event_time: Math.floor(Date.now() / 1000),
+            event_id: eventId || undefined,
+            event_source_url: eventSourceUrl || 'https://al-ameen-iq.com',
+            action_source: 'website',
+            user_data: {
+              client_ip_address: req.headers['x-forwarded-for'] || req.socket.remoteAddress,
+              client_user_agent: req.headers['user-agent'],
+              fbp: fbp || undefined,
+              fbc: fbc || undefined,
+            },
+            custom_data: {
+              content_name: 'بكج حسين التعليمي',
+            },
+          },
+        ],
+      };
+
+      const fbResponse = await fetch(
+        `https://graph.facebook.com/${GRAPH_API_VERSION}/${PIXEL_ID}/events?access_token=${ACCESS_TOKEN}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(eventData),
+        }
+      );
+      const result = await fbResponse.json();
+      return res.json({ success: true, fbResult: result });
+    }
+
+    res.json({ success: true, fbTracked: false });
+  } catch (error) {
+    console.error('خطأ في تتبع نقرة التواصل:', error);
     res.status(500).json({ error: 'حدث خطأ' });
   }
 });
@@ -467,4 +517,3 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`🚀 السيرفر شغال على المنفذ ${PORT}`);
 });
-      
